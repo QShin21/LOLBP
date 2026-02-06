@@ -50,7 +50,7 @@ export interface DraftState {
   matchTitle: string;
   seriesMode: SeriesMode;
   draftMode: DraftMode;
-  //timeLimit: number; // <--- 新增：每回合秒数 (0 代表无上限)
+  timeLimit: number; // <--- 新增：每回合秒数 (0 代表无上限)
   teamA: { name: string; wins: number };
   teamB: { name: string; wins: number };
   currentGameIdx: number; 
@@ -172,6 +172,7 @@ export const INITIAL_STATE: DraftState = {
   matchTitle: '',
   seriesMode: 'BO1',
   draftMode: 'STANDARD',
+  timeLimit: 30, // <--- 新增：默认 30s
   teamA: { name: 'Team A', wins: 0 },
   teamB: { name: 'Team B', wins: 0 },
   currentGameIdx: 1,
@@ -470,7 +471,7 @@ export const applyAction = (state: DraftState, payload: any, now: number): Draft
   if (!action) return state;
 
   const newState = reduceState(state, action);
-  
+  const duration = state.timeLimit * 1000; // 秒转毫秒
   if (action.type === 'PAUSE_GAME') {
       if (!state.paused) newState.pausedAt = now;
       else newState.pausedAt = state.pausedAt;
@@ -481,11 +482,11 @@ export const applyAction = (state: DraftState, payload: any, now: number): Draft
       }
   } else if (newState.status === 'RUNNING' && newState.phase !== 'FINISHED' && !newState.paused) {
       if (action.type === 'START_GAME') {
-          newState.stepEndsAt = now + STEP_DURATION_MS;
+          newState.stepEndsAt = duration > 0 ? now + duration : 0;
       } else if (state.phase === 'DRAFT' && newState.phase === 'SWAP') {
-          newState.stepEndsAt = now + STEP_DURATION_MS; 
+          newState.stepEndsAt = duration > 0 ? now + duration : 0; 
       } else if (newState.phase === 'DRAFT') {
-          newState.stepEndsAt = now + STEP_DURATION_MS;
+          newState.stepEndsAt = duration > 0 ? now + duration : 0;
       } else {
         // Swap 阶段内部动作不重置时间
         newState.stepEndsAt = state.stepEndsAt;
@@ -504,8 +505,12 @@ export const replay = (history: DraftAction[], now: number): DraftState => {
         state = reduceState(state, action);
     }
     state.history = history;
+    
+    // 这里的 duration 也需要从 state 取
+    const duration = state.timeLimit * 1000; 
+
     if (state.status === 'RUNNING' && state.phase !== 'FINISHED' && !state.paused) {
-        state.stepEndsAt = now + STEP_DURATION_MS;
+        state.stepEndsAt = duration > 0 ? now + duration : 0; // <--- 修改这里
     } else {
         state.stepEndsAt = 0;
     }
